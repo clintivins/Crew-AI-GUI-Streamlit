@@ -8,6 +8,7 @@ from tools.CustomCodeInterpreterTool import CustomCodeInterpreterTool
 from tools.CustomFileWriteTool import CustomFileWriteTool
 from tools.ScrapeWebsiteToolEnhanced import ScrapeWebsiteToolEnhanced
 from tools.ScrapflyScrapeWebsiteTool import ScrapflyScrapeWebsiteTool
+from tools.CurrentDateTimeTool import CurrentDateTimeTool
 
 from tools.DuckDuckGoSearchTool import DuckDuckGoSearchTool
 
@@ -353,6 +354,14 @@ class MyCustomCodeInterpreterTool(MyTool):
     def create_tool(self) -> CustomCodeInterpreterTool:
         return CustomCodeInterpreterTool(workspace_dir=self.parameters.get('workspace_dir') if self.parameters.get('workspace_dir') else "workspace")
 
+class MyCurrentDateTimeTool(MyTool):
+    def __init__(self, tool_id=None):
+        parameters = {}
+        super().__init__(tool_id, 'CurrentDateTime', "Provides the current UTC and local date/time context for time-aware queries.", parameters)
+
+    def create_tool(self) -> CurrentDateTimeTool:
+        return CurrentDateTimeTool()
+
 class MyCSVSearchToolEnhanced(MyTool):
     def __init__(self, tool_id=None, csv=None):
         parameters = {
@@ -412,6 +421,7 @@ TOOL_CLASSES = {
     'CustomCodeInterpreterTool': MyCustomCodeInterpreterTool,
     'FileReadTool': MyFileReadTool,
     'CustomFileWriteTool': MyCustomFileWriteTool,
+    'CurrentDateTime': MyCurrentDateTimeTool,
     'DirectorySearchTool': MyDirectorySearchTool,
     'DirectoryReadTool': MyDirectoryReadTool,
 

@@ -72,7 +72,8 @@ class PageAgents:
                         agent.draw(key=unique_key)
                         if agent.edit:
                             editing = True
-                    st.button('Create agent', on_click=self.create_agent, disabled=editing, kwargs={'crew': crew}, key=f"create_agent_{crew.name}")
+                    # Use crew.id instead of name to avoid duplicate Streamlit keys when crews share the default name
+                    st.button('Create agent', on_click=self.create_agent, disabled=editing, kwargs={'crew': crew}, key=f"create_agent_{crew.id}")
 
             if len(ss.agents) == 0:
                 st.write("No agents defined yet.")

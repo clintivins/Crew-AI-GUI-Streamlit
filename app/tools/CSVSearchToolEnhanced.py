@@ -1,16 +1,53 @@
 from pydantic import BaseModel, Field, model_validator
 from crewai_tools import RagTool
-from embedchain.models.data_type import DataType
 from typing import Any, Optional, Type
-from embedchain import App
 from crewai_tools.tools.rag.rag_tool import Adapter
+from enum import Enum
+
+"""CSVSearchToolEnhanced
+
+This module depends on the optional 'embedchain' package. The original implementation
+performed hard imports which caused the entire Streamlit app to fail on startup when
+`embedchain` was not installed (common on Python 3.13 where older embedchain versions
+try to compile an older tiktoken requiring a Rust toolchain).
+
+We now gracefully degrade: if embedchain is unavailable the tool remains importable
+but any attempt to use it will return an informative message instead of crashing
+the whole application.
+"""
+
+EMBEDCHAIN_AVAILABLE = True
+try:  # Attempt to import embedchain lazily / defensively
+    from embedchain.models.data_type import DataType  # type: ignore
+    from embedchain import App  # type: ignore
+except Exception:  # Broad except to cover ImportError plus potential version errors
+    EMBEDCHAIN_AVAILABLE = False
+
+    class _PlaceholderDataType(Enum):  # Minimal stand‑in so attribute access is safe
+        CSV = "csv"
+
+    DataType = _PlaceholderDataType  # type: ignore
+    App = None  # type: ignore
+
 
 class CSVEmbedchainAdapter(Adapter):
-    embedchain_app: App
+    """Safe adapter wrapper. If embedchain isn't available we short‑circuit.
+    """
+
+    embedchain_app: Any  # Using Any because App may be a placeholder (None) when unavailable
     summarize: bool = False
     src: Optional[str] = None
 
+    def _unavailable(self) -> str:
+        return (
+            "The 'embedchain' dependency is not installed (or failed to load). "
+            "Install it manually with 'pip install embedchain' (Python 3.11/3.12 recommended) "
+            "to enable CSV semantic search."
+        )
+
     def query(self, question: str) -> str:
+        if not EMBEDCHAIN_AVAILABLE or self.embedchain_app is None:
+            return self._unavailable()
         where = (
             {"app_id": self.embedchain_app.config.id, "url": self.src}
             if self.src
@@ -28,6 +65,8 @@ class CSVEmbedchainAdapter(Adapter):
         *args: Any,
         **kwargs: Any,
     ) -> None:
+        if not EMBEDCHAIN_AVAILABLE or self.embedchain_app is None:
+            return  # Silently ignore when unavailable
         self.src = args[0] if args else None
         self.embedchain_app.add(*args, **kwargs)
 
@@ -54,11 +93,15 @@ class CSVSearchToolEnhanced(RagTool):
     @model_validator(mode="after")
     def _set_default_adapter(self):
         if isinstance(self.adapter, RagTool._AdapterPlaceholder):
-            from embedchain import App
-
-            app = App.from_config(config=self.config) if self.config else App()
+            app_instance = None
+            if EMBEDCHAIN_AVAILABLE and App is not None:
+                try:
+                    app_instance = App.from_config(config=self.config) if self.config else App()  # type: ignore
+                except Exception:
+                    # Fallback to unavailable state
+                    app_instance = None
             self.adapter = CSVEmbedchainAdapter(
-                embedchain_app=app, summarize=self.summarize
+                embedchain_app=app_instance, summarize=self.summarize
             )
         return self
 
@@ -70,11 +113,13 @@ class CSVSearchToolEnhanced(RagTool):
         if description:
             kwargs["description"] = description
         if csv:
-            kwargs["data_type"] = DataType.CSV
+            kwargs["data_type"] = getattr(DataType, "CSV", "csv")
             kwargs["args_schema"] = FixedCSVSearchToolSchema
             super().__init__(**kwargs)
-            self.add(csv)            
-            #self._generate_description()
+            try:
+                self.add(csv)
+            except Exception:
+                pass
         else:
             super().__init__(**kwargs)
 
@@ -101,6 +146,11 @@ class CSVSearchToolEnhanced(RagTool):
             return "Please provide a query to search the CSV's content."
         if not "csv" in kwargs and not self.args_schema == FixedCSVSearchToolSchema:
             return "Please provide a CSV to search."
+        if not EMBEDCHAIN_AVAILABLE:
+            return (
+                "CSV semantic search tool is disabled: missing 'embedchain'. "
+                "Install with 'pip install embedchain' (Python 3.11/3.12) to enable."
+            )
         return super()._run(**kwargs)
     
 
