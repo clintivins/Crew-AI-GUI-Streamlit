@@ -14,6 +14,8 @@ Welcome to CrewAI Studio! This application provides a user-friendly interface wr
 - **LLM providers supported**: Currently OpenAI, Groq, Anthropic, ollama, Grok and LM Studio backends are supported. OpenAI key is probably still needed for embeddings in many tools. Don't forget to load an embedding model when using LM Studio.
 - **Single Page app export**: Feature to export crew as simple single page streamlit app.
 - **Threaded crew run**: Crews can run in background and can be stopped.
+- **Current Date/Time Context Tool**: New `CurrentDateTime` tool supplies the live UTC and local timestamp so agents can ground searches in "now".
+- **Graceful Optional Dependencies**: Enhanced CSV search tool (`CSVSearchToolEnhanced`) degrades cleanly if optional `embedchain` isn't installed.
 
 ## Support CrewAI Studio
 
@@ -157,6 +159,68 @@ docker-compose up --build
 ## Configuration
 
 Before running the application, ensure you update the `.env` file with your API keys and other necessary configurations. An example `.env` file is provided for reference.
+
+## Real-Time & Fresh Data Retrieval
+
+To make the model aware of the current moment and retrieve up‑to‑date information:
+
+1. Add the `CurrentDateTime` tool to your agent. The agent should call it first to anchor the current date (UTC + local).
+2. Add at least one search / web tool (e.g. `DuckDuckGoSearchTool`, `SerperDevTool`, `EXASearchTool`, or `ScrapeWebsiteToolEnhanced`).
+3. In your task prompt, explicitly instruct the agent to: (a) call `CurrentDateTime`, (b) perform targeted searches scoped by recent time intervals (e.g. "past 7 days"), (c) cite sources.
+4. (Optional) Use scraping tools after search to pull full-page context before summarizing.
+
+Example task prompt:
+```
+Research severe cybersecurity incidents reported in the last 10 days. First call CurrentDateTime to determine today's date, then use a search tool to find at least 5 recent credible sources (CISA, reputable news, vendor reports). Extract incident names, dates, impact, and provide a concise synthesis with source links.
+```
+
+## CurrentDateTime Tool
+
+The `CurrentDateTime` tool returns:
+- UTC ISO timestamp
+- Local ISO timestamp
+- Date, time, weekday
+- Unix epoch (seconds)
+
+This minimizes hallucinations around "current" events by giving the LLM an authoritative temporal context to frame subsequent searches.
+
+## Enhanced CSV Search (Optional embedchain)
+
+`CSVSearchToolEnhanced` attempts to use `embedchain` for semantic querying over CSV files. If `embedchain` (and its dependency `tiktoken`) cannot be installed (e.g. missing Rust compiler on some Python versions), the application will:
+- Skip semantic indexing gracefully
+- Return an explanatory message instead of crashing at startup
+
+To enable full semantic CSV search:
+```
+pip install embedchain
+```
+If you encounter build errors for `tiktoken`, consider using Python 3.11/3.12 or install Rust (https://www.rust-lang.org/tools/install) before retrying.
+
+## Recent Additions / Changes
+
+| Date | Change |
+|------|--------|
+| 2025-09-25 | Added `CurrentDateTime` tool for temporal grounding |
+| 2025-09-25 | Fixed duplicate Streamlit widget key collisions for agents & tasks (use IDs instead of names) |
+| 2025-09-25 | Added graceful fallback for `CSVSearchToolEnhanced` when `embedchain` is absent |
+
+## Syncing With Upstream (If You Forked)
+
+If you forked from the original repository and want to pull future updates:
+```
+git remote add upstream https://github.com/strnad/CrewAI-Studio.git
+git fetch upstream
+git checkout main
+git merge upstream/main   # or: git rebase upstream/main
+git push origin main
+```
+Resolve any merge conflicts, then re-test the app (`./run_venv.bat` or `./run_venv.sh`).
+
+## Suggested Prompt Pattern for Fresh News
+
+```
+You MUST first call CurrentDateTime to know today's date. Then perform multiple focused web searches with time qualifiers (e.g. "past week", specific month/year). Avoid answering until you have at least 5 distinct, dated sources. Return a summary with an ISO8601 date list and a Sources section.
+```
 
 ## Troubleshooting
 In case of problems:
